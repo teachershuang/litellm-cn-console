@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiteLLM 简化管理台</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body data-default-range="{{ default_range }}">
+  <div class="page-noise"></div>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">F4T · LiteLLM</p>
+      <h1>简化中文管理台</h1>
+      <p class="subcopy">模型注册、密钥生成、分时分日统计和单次请求记录都集中在这里。</p>
+    </div>
+    <div class="topbar-actions">
+      <div class="status-pill" id="gatewayBadge">正在检查网关...</div>
+      <form method="post" action="/logout">
+        <button type="submit" class="ghost-button">退出登录</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel hero-panel">
+      <div class="panel-head">
+        <div>
+          <h2>使用概览</h2>
+          <p class="section-copy">按时间段查看请求量、Token 量和按密钥分布。</p>
+        </div>
+        <div class="range-toolbar">
+          <button class="range-button active" data-range="24h">近 24 小时</button>
+          <button class="range-button" data-range="7d">近 7 天</button>
+          <button class="range-button" data-range="30d">近 30 天</button>
+          <label class="date-field">
+            <span>开始</span>
+            <input type="date" id="startDate">
+          </label>
+          <label class="date-field">
+            <span>结束</span>
+            <input type="date" id="endDate">
+          </label>
+          <button class="ghost-button" id="applyCustomRange">应用日期</button>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span>请求总数</span>
+          <strong id="requestsCount">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>Token 总量</span>
+          <strong id="tokensCount">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>累计费用</span>
+          <strong id="spendCount">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>失败请求</span>
+          <strong id="failuresCount">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>模型数量</span>
+          <strong id="modelCount">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>密钥数量</span>
+          <strong id="keyCount">-</strong>
+        </article>
+      </div>
+
+      <div class="chart-grid">
+        <article class="chart-card">
+          <div class="chart-title-row">
+            <h3>分时请求量</h3>
+            <span id="hourlyRangeLabel" class="muted-pill">-</span>
+          </div>
+          <div id="hourlyChart" class="bar-chart vertical"></div>
+        </article>
+        <article class="chart-card">
+          <div class="chart-title-row">
+            <h3>分日 Token 总量</h3>
+            <span class="muted-pill">按日汇总</span>
+          </div>
+          <div id="dailyChart" class="bar-chart vertical"></div>
+        </article>
+        <article class="chart-card wide">
+          <div class="chart-title-row">
+            <h3>按密钥请求量</h3>
+            <span class="muted-pill">前 10 个密钥</span>
+          </div>
+          <div id="keyChart" class="bar-chart horizontal"></div>
+        </article>
+      </div>
+
+      <div id="metaWarning" class="note-strip hidden"></div>
+    </section>
+
+    <section class="split-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>注册新模型</h2>
+            <p class="section-copy">面向 OpenAI 兼容接口。适合本地 vLLM、自建服务或线上 Qwen 风格 API。</p>
+          </div>
+        </div>
+        <form id="modelForm" class="stack-form">
+          <label>
+            <span>对外模型名</span>
+            <input type="text" name="model_name" placeholder="例如 qwen3.5-32b" required>
+          </label>
+          <label>
+            <span>上游模型名</span>
+            <input type="text" name="upstream_model" placeholder="例如 qwen3.5-32b 或 provider/model" required>
+          </label>
+          <label>
+            <span>接口地址</span>
+            <input type="text" name="api_base" placeholder="例如 http://127.0.0.1:8001/v1" required>
+          </label>
+          <label>
+            <span>API Key</span>
+            <input type="text" name="api_key" placeholder="本地模型可留空">
+          </label>
+          <label>
+            <span>RPM 限流</span>
+            <input type="number" name="rpm" value="600">
+          </label>
+          <label>
+            <span>备注说明</span>
+            <textarea name="description" rows="3" placeholder="例如：本地 Qwen 32B，8k 上下文"></textarea>
+          </label>
+          <button type="submit" class="primary-button">注册模型</button>
+          <div id="modelFormMessage" class="inline-message"></div>
+        </form>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>创建新密钥</h2>
+            <p class="section-copy">如果要做“按密钥统计”，建议都通过虚拟密钥访问，不要直接用主密钥。</p>
+          </div>
+        </div>
+        <form id="keyForm" class="stack-form">
+          <label>
+            <span>密钥别名</span>
+            <input type="text" name="key_alias" placeholder="例如 研发组-A" required>
+          </label>
+          <label>
+            <span>有效期</span>
+            <input type="text" name="duration" value="30d" placeholder="例如 30d / 12h / 7d">
+          </label>
+          <label>
+            <span>允许模型</span>
+            <input type="text" name="models" placeholder="多个模型用逗号分隔，可留空表示全部允许">
+          </label>
+          <label>
+            <span>预算上限（可空）</span>
+            <input type="number" step="0.0001" name="max_budget" placeholder="例如 10">
+          </label>
+          <button type="submit" class="primary-button">生成密钥</button>
+          <div id="keyFormMessage" class="inline-message"></div>
+          <textarea id="newKeyOutput" class="secret-output hidden" readonly></textarea>
+        </form>
+      </article>
+    </section>
+
+    <section class="split-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>当前模型</h2>
+            <p class="section-copy">配置模型会保留在 `config.yaml`，数据库模型支持直接删除。</p>
+          </div>
+          <button class="ghost-button" id="refreshModels">刷新模型</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模型名</th>
+                <th>上游模型</th>
+                <th>地址</th>
+                <th>来源</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="modelsTable"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>已有密钥</h2>
+            <p class="section-copy">这里先保留创建和查看。后续如需要，可再加停用、删除和预算控制。</p>
+          </div>
+          <button class="ghost-button" id="refreshKeys">刷新密钥</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>别名</th>
+                <th>已花费</th>
+                <th>模型范围</th>
+                <th>到期时间</th>
+              </tr>
+            </thead>
+            <tbody id="keysTable"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>单次请求记录</h2>
+          <p class="section-copy">按请求维度查看时间、模型、密钥、Token、费用、耗时和报错。</p>
+        </div>
+        <div class="pager-strip">
+          <button class="ghost-button" id="prevLogsPage">上一页</button>
+          <span id="logsPageText">第 1 页</span>
+          <button class="ghost-button" id="nextLogsPage">下一页</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>模型</th>
+              <th>密钥</th>
+              <th>状态</th>
+              <th>Tokens</th>
+              <th>费用</th>
+              <th>耗时 ms</th>
+              <th>请求 ID</th>
+              <th>错误</th>
+            </tr>
+          </thead>
+          <tbody id="logsTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
