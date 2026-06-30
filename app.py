@@ -46,7 +46,7 @@ class Settings(BaseModel):
     )
     app_port: int = Field(default_factory=lambda: int(_env("SIMPLE_UI_PORT", "4040")))
     max_chart_pages: int = Field(
-        default_factory=lambda: int(_env("SIMPLE_UI_MAX_CHART_PAGES", "20"))
+        default_factory=lambda: int(_env("SIMPLE_UI_MAX_CHART_PAGES", "200"))
     )
     demo_mode: bool = Field(
         default_factory=lambda: os.getenv("SIMPLE_UI_DEMO_MODE", "false").lower()
@@ -149,6 +149,14 @@ def _to_float(*values: Any) -> float:
     return 0.0
 
 
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 def _nested(row: dict[str, Any], *path: str) -> Any:
     current: Any = row
     for key in path:
@@ -215,9 +223,9 @@ def token_breakdown(row: dict[str, Any]) -> dict[str, int | bool]:
         _nested(row, "usage", "completion_tokens_details", "reasoning_tokens"),
         _nested(row, "metadata", "reasoning_tokens"),
     )
-    cache_hit = bool(
-        row.get("cache_hit")
-        or _nested(row, "metadata", "cache_hit")
+    cache_hit = (
+        _to_bool(row.get("cache_hit"))
+        or _to_bool(_nested(row, "metadata", "cache_hit"))
         or cached_tokens > 0
     )
     return {

@@ -50,6 +50,98 @@ POST /key/generate
 GET  /spend/logs/v2
 ```
 
+## 对接 LiteLLM
+
+推荐部署方式是让本控制台和 LiteLLM Gateway 运行在同一台内网服务器上。用户访问控制台的地址可以是服务器 IP，例如 `http://192.168.8.29:4040`；控制台在服务器内部访问 LiteLLM，地址写 `http://127.0.0.1:4000`。
+
+### 1. 确认 LiteLLM 已启动
+
+在服务器上执行：
+
+```bash
+curl http://127.0.0.1:4000/health/liveliness
+```
+
+正常会返回：
+
+```text
+"I'm alive!"
+```
+
+### 2. 确认 LiteLLM 管理接口可用
+
+```bash
+export LITELLM_MASTER_KEY='sk-你的-master-key'
+
+curl -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+  http://127.0.0.1:4000/model/info
+
+curl -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+  "http://127.0.0.1:4000/key/list?page=1&size=5&return_full_object=true"
+```
+
+如果 `/key/list` 或 `/spend/logs/v2` 返回 `Database not connected`、`Prisma Client is not initialized`，需要先修复或重启 LiteLLM 的数据库连接，否则用量统计无法读取历史日志。
+
+### 3. 配置控制台环境变量
+
+在本项目目录创建 `env.simple_ui`：
+
+```bash
+export SIMPLE_UI_USERNAME='admin'
+export SIMPLE_UI_PASSWORD='请换成强密码'
+export SIMPLE_UI_SESSION_SECRET='请换成随机字符串'
+export SIMPLE_UI_PORT='4040'
+
+# 生产环境保持 0；只有截图或本地预览才设为 1。
+export SIMPLE_UI_DEMO_MODE='0'
+
+# 聚合 /spend/logs/v2 的最大页数。每页 100 条；200 页可覆盖 2 万条日志。
+export SIMPLE_UI_MAX_CHART_PAGES='200'
+
+# 和 LiteLLM 同机部署时推荐写 127.0.0.1。
+export LITELLM_GATEWAY_URL='http://127.0.0.1:4000'
+export LITELLM_MASTER_KEY='sk-你的-master-key'
+```
+
+如果服务器上需要指定 Python 解释器，可以加：
+
+```bash
+export SIMPLE_UI_PYTHON_BIN='/home/ls/anaconda3/envs/litellm/bin/python'
+```
+
+### 4. 启动控制台
+
+```bash
+bash start_simple_cn_ui.sh
+```
+
+访问：
+
+```text
+http://服务器IP:4040/login
+```
+
+### 5. 验证统计是否接上真实历史数据
+
+登录后打开“使用统计”。如果历史日志可用，页面不会出现数据库告警，并且 7 天 / 30 天的总请求数、Tokens、成本会来自 LiteLLM 的 `/spend/logs/v2`。
+
+可以用下面的命令直接验证日志接口：
+
+```bash
+curl -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+  "http://127.0.0.1:4000/spend/logs/v2?start_date=2026-06-01%2000:00:00&end_date=2026-06-30%2023:59:59&page=1&page_size=5&sort_by=startTime&sort_order=desc"
+```
+
+控制台统计口径：
+
+- `输入 Tokens`：优先读取 `prompt_tokens` / `input_tokens`
+- `输出 Tokens`：优先读取 `completion_tokens` / `output_tokens`
+- `缓存命中 Tokens`：读取 `cached_tokens` 或 `prompt_tokens_details.cached_tokens`
+- `缓存创建 Tokens`：读取 `cache_creation_input_tokens`
+- `推理 Tokens`：读取 `reasoning_tokens` 或 `completion_tokens_details.reasoning_tokens`
+- `总成本`：累加 LiteLLM 日志里的 `spend`
+- `失败请求`：按日志字段 `status == failure` 统计
+
 ## 快速开始
 
 ### 1. 安装依赖
