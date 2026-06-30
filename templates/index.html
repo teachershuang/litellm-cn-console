@@ -257,9 +257,37 @@
         </div>
         <div class="pager-strip">
           <button class="ghost-button" id="prevLogsPage" type="button">上一页</button>
-          <span id="logsPageText">第 1 页</span>
+          <span id="logsPageText">第 1 / 1 页</span>
+          <label class="compact-field">
+            <span>跳转</span>
+            <input type="number" id="logsPageInput" min="1" value="1">
+          </label>
+          <select id="logsPageSize" class="select-field" aria-label="每页条数">
+            <option value="20">20 条/页</option>
+            <option value="50">50 条/页</option>
+            <option value="100">100 条/页</option>
+          </select>
+          <button class="ghost-button" id="jumpLogsPage" type="button">跳转</button>
           <button class="ghost-button" id="nextLogsPage" type="button">下一页</button>
         </div>
+      </div>
+      <div class="logs-filter">
+        <button class="log-range-button" data-log-range="24h" type="button">24 小时</button>
+        <button class="log-range-button" data-log-range="7d" type="button">7 天</button>
+        <button class="log-range-button active" data-log-range="30d" type="button">30 天</button>
+        <label class="date-field">
+          <span>开始</span>
+          <input type="date" id="logsStartDate">
+        </label>
+        <label class="date-field">
+          <span>结束</span>
+          <input type="date" id="logsEndDate">
+        </label>
+        <button class="ghost-button" id="applyLogsRange" type="button">应用日志日期</button>
+      </div>
+      <div class="log-summary">
+        <span id="logsTotalText">共 0 条记录</span>
+        <span>请求日志按 LiteLLM 原始日志服务端分页读取，不会一次性拉取全部历史。</span>
       </div>
       <div class="table-panel">
         <table>

@@ -2,8 +2,14 @@ const state = {
   rangeName: document.body.dataset.defaultRange || "24h",
   startDate: "",
   endDate: "",
+  logRangeName: "30d",
+  logStartDate: "",
+  logEndDate: "",
   logsPage: 1,
   logsTotalPages: 1,
+  logsTotal: 0,
+  logsPageSize: 20,
+  activeSection: "usageSection",
 };
 
 const seriesConfig = [
@@ -104,6 +110,22 @@ function queryString(extra = {}) {
     params.set("end_date", state.endDate);
   } else {
     params.set("range_name", state.rangeName);
+  }
+  Object.entries(extra).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+  return params.toString();
+}
+
+function logsQueryString(extra = {}) {
+  const params = new URLSearchParams();
+  if (state.logStartDate && state.logEndDate) {
+    params.set("start_date", state.logStartDate);
+    params.set("end_date", state.logEndDate);
+  } else {
+    params.set("range_name", state.logRangeName);
   }
   Object.entries(extra).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
@@ -309,8 +331,6 @@ async function loadDashboard() {
   renderUsageChart(data.hourly_usage || []);
   renderRank("keyUsage", data.key_usage || []);
   renderRank("modelUsage", data.model_usage || []);
-  renderLogs(data.recent_logs || []);
-
   const warning = byId("metaWarning");
   if (data.warnings?.length) {
     warning.textContent = `网关部分接口不可用：${data.warnings.join("；")}`;
@@ -324,10 +344,15 @@ async function loadDashboard() {
 }
 
 async function loadLogs(page = 1) {
-  const data = await api(`/api/logs?${queryString({ page, page_size: 20 })}`);
+  const nextPage = Math.max(1, Number(page || 1));
+  const data = await api(`/api/logs?${logsQueryString({ page: nextPage, page_size: state.logsPageSize })}`);
   state.logsPage = data.page;
   state.logsTotalPages = data.total_pages || 1;
+  state.logsTotal = data.total || 0;
   byId("logsPageText").textContent = `第 ${data.page} / ${state.logsTotalPages} 页`;
+  byId("logsTotalText").textContent = `共 ${formatNumber(state.logsTotal)} 条记录`;
+  byId("logsPageInput").value = data.page;
+  byId("logsPageInput").max = state.logsTotalPages;
   renderLogs(data.data || []);
   if (data.warning) showToast(`请求日志暂不可用：${data.warning}`, true);
 }
@@ -356,7 +381,7 @@ function setActiveRange(rangeName) {
 async function refreshAll() {
   try {
     await Promise.all([loadDashboard(), loadModels(), loadKeys()]);
-    await loadLogs(1);
+    if (state.activeSection === "logsSection") await loadLogs(1);
   } catch (error) {
     showToast(`初始化失败：${error.message}`, true);
   }
@@ -369,24 +394,55 @@ async function bootstrap() {
   renderKeys(init.keys || []);
   if (init.warnings?.length) showToast(`网关部分接口不可用：${init.warnings.join("；")}`, true);
   await loadDashboard();
-  await loadLogs(1);
 }
 
 document.querySelectorAll(".tab-button").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     document.querySelectorAll(".tab-button").forEach((item) => item.classList.remove("active"));
     document.querySelectorAll(".view-section").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     byId(button.dataset.target).classList.add("active");
+    state.activeSection = button.dataset.target;
+    if (state.activeSection === "logsSection") {
+      await loadLogs(state.logsPage || 1);
+    }
   });
 });
 
 document.querySelectorAll(".range-button").forEach((button) => {
   button.addEventListener("click", async () => {
     setActiveRange(button.dataset.range);
+    state.logsPage = 1;
     await loadDashboard();
+    if (state.activeSection === "logsSection") await loadLogs(1);
+  });
+});
+
+document.querySelectorAll(".log-range-button").forEach((button) => {
+  button.addEventListener("click", async () => {
+    state.logRangeName = button.dataset.logRange;
+    state.logStartDate = "";
+    state.logEndDate = "";
+    state.logsPage = 1;
+    document.querySelectorAll(".log-range-button").forEach((item) => {
+      item.classList.toggle("active", item === button);
+    });
     await loadLogs(1);
   });
+});
+
+byId("applyLogsRange").addEventListener("click", async () => {
+  const start = byId("logsStartDate").value;
+  const end = byId("logsEndDate").value;
+  if (!start || !end) {
+    showToast("请选择日志开始和结束日期。", true);
+    return;
+  }
+  state.logStartDate = start;
+  state.logEndDate = end;
+  state.logsPage = 1;
+  document.querySelectorAll(".log-range-button").forEach((button) => button.classList.remove("active"));
+  await loadLogs(1);
 });
 
 byId("applyCustomRange").addEventListener("click", async () => {
@@ -398,9 +454,10 @@ byId("applyCustomRange").addEventListener("click", async () => {
   }
   state.startDate = start;
   state.endDate = end;
+  state.logsPage = 1;
   document.querySelectorAll(".range-button").forEach((button) => button.classList.remove("active"));
   await loadDashboard();
-  await loadLogs(1);
+  if (state.activeSection === "logsSection") await loadLogs(1);
 });
 
 byId("modelForm").addEventListener("submit", async (event) => {
@@ -414,6 +471,7 @@ byId("modelForm").addEventListener("submit", async (event) => {
     setMessage("modelFormMessage", "模型已注册。");
     await loadModels();
     await loadDashboard();
+    if (state.activeSection === "logsSection") await loadLogs(1);
   } catch (error) {
     setMessage("modelFormMessage", error.message, true);
   }
@@ -441,6 +499,7 @@ byId("keyForm").addEventListener("submit", async (event) => {
     event.target.reset();
     await loadKeys();
     await loadDashboard();
+    if (state.activeSection === "logsSection") await loadLogs(1);
   } catch (error) {
     setMessage("keyFormMessage", error.message, true);
   }
@@ -456,6 +515,25 @@ byId("prevLogsPage").addEventListener("click", async () => {
 
 byId("nextLogsPage").addEventListener("click", async () => {
   if (state.logsPage < state.logsTotalPages) await loadLogs(state.logsPage + 1);
+});
+
+byId("jumpLogsPage").addEventListener("click", async () => {
+  const requested = Number(byId("logsPageInput").value || 1);
+  const page = Math.min(Math.max(1, requested), state.logsTotalPages || 1);
+  await loadLogs(page);
+});
+
+byId("logsPageInput").addEventListener("keydown", async (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    byId("jumpLogsPage").click();
+  }
+});
+
+byId("logsPageSize").addEventListener("change", async (event) => {
+  state.logsPageSize = Number(event.target.value || 20);
+  state.logsPage = 1;
+  await loadLogs(1);
 });
 
 bootstrap().catch((error) => {
