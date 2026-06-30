@@ -3,15 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LiteLLM 简化管理台登录</title>
+  <title>LiteLLM 中文控制台登录</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class="login-shell">
-  <div class="login-backdrop"></div>
   <main class="login-card">
     <p class="eyebrow">轻量中文管理台</p>
-    <h1>LiteLLM 网关控制台</h1>
-    <p class="subcopy">只保留模型、密钥、统计和请求记录，避免原始后台过于繁杂。</p>
+    <h1>登录 LiteLLM 控制台</h1>
+    <p class="section-heading-copy">集中管理模型、密钥、用量统计和请求日志。</p>
     <form method="post" action="/login" class="auth-form">
       <label>
         <span>用户名</span>
@@ -24,7 +23,7 @@
       {% if error %}
       <div class="error-box">{{ error }}</div>
       {% endif %}
-      <button type="submit" class="primary-button">进入管理台</button>
+      <button type="submit" class="primary-button">进入控制台</button>
     </form>
   </main>
 </body>
